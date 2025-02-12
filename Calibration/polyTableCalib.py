@@ -8,7 +8,7 @@ from scipy import interpolate
 import argparse
 
 import sys
-sys.path.append("..")
+sys.path.append("..")  # TODO: Replace this.
 import Basics.params as pr
 import Basics.sensorParams as psp
 from Basics.Geometry import Circle

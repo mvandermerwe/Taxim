@@ -1,11 +1,11 @@
 # experimental params
-ball_radius = 4.00/2
-pixmm = 0.0295 #0.0266 digit
+ball_radius = 4.0 / 2
+pixmm = 0.065  # 0.0295 #0.0266 digit
 
 # lookup table params
-numBins = 125;
+numBins = 120
 
 # sensor setting
-h = 480
-w = 640
+h = 240
+w = 320
 d = 900

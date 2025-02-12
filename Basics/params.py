@@ -2,7 +2,7 @@
 noMarkerMaskThreshold = 30
 kscale=50;
 diffThreshold = 5;
-frameMixingPercentage = 0.15;
+frameMixingPercentage = 0.0;
 
 # shadow params
 max_rad = 100
