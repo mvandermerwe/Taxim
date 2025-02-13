@@ -1,3 +1,5 @@
+import multiprocessing
+import os
 from os import path as osp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +12,8 @@ import argparse
 
 import sys
 
+from tqdm import trange, tqdm
+
 from stable_stacking.utils import utils
 
 sys.path.append("..")
@@ -19,32 +23,9 @@ import Basics.params as pr
 import Basics.sensorParams as psp
 from Calibration.pre_proc_images import proc_image, find_marker
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-obj", nargs='?', default='square',
-                    help="Name of Object to be tested, supported_objects_list = [square, cylinder6]")
-parser.add_argument('-depth', default=1.0, type=float, help='Indetation depth into the gelpad.')
-args = parser.parse_args()
 
-
-class simulator(object):
-    def __init__(self, data_folder, filePath, obj):
-        """
-        Initialize the simulator.
-        1) load the object,
-        2) load the calibration files,
-        3) generate shadow table from shadow masks
-        """
-        # read in object's ply file
-        # object facing positive direction of z axis
-        # objPath = osp.join(filePath,obj)
-        # self.obj_name = obj.split('.')[0]
-        # print("load object: " + self.obj_name)
-        # f = open(objPath)
-        # lines = f.readlines()
-        # self.verts_num = int(lines[3].split(' ')[-1])
-        # verts_lines = lines[10:10 + self.verts_num]
-        # self.vertices = np.array([list(map(float, l.strip().split(' '))) for l in verts_lines])
-
+class Renderer(object):
+    def __init__(self, data_folder):
         # polytable
         calib_data = osp.join(data_folder, "polycalib.npz")
         self.calib_data = CalibData(calib_data)
@@ -59,12 +40,6 @@ class simulator(object):
         self.bg_proc = self.processInitialFrame()
         # self.f0 = data_file['f0']
         # self.bg_proc = self.f0
-
-        # shadow calibration
-        # self.shadow_depth = [0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2]
-        # shadowData = np.load(osp.join(data_folder, "shadowTable.npz"),allow_pickle=True)
-        # self.direction = shadowData['shadowDirections']
-        # self.shadowTable = shadowData['shadowTable']
 
     def processInitialFrame(self):
         """
@@ -99,17 +74,13 @@ class simulator(object):
 
         return f0
 
-    def simulating(self, heightMap, contact_mask, contact_height, shadow=False):
+    def render(self, heightMap):
         """
         Simulate the tactile image from the height map
         heightMap: heightMap of the contact
-        contact_mask: indicate the contact area
-        contact_height: the height of each pix
-        shadow: whether add the shadow
 
         return:
         sim_img: simulated tactile image w/o shadow
-        shadow_sim_img: simluated tactile image w/ shadow
         """
 
         # generate gradients of the height map
@@ -164,149 +135,7 @@ class simulator(object):
         sim_img[self.marker_mask] = self.f0_raw[self.marker_mask]
         sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (3, 3), 2)
 
-        if not shadow:
-            return sim_img, sim_img
-
-        # add shadow
-        cx = psp.w // 2
-        cy = psp.h // 2
-
-        # find shadow attachment area
-        kernel = np.ones((5, 5), np.uint8)
-        dialate_mask = cv2.dilate(np.float32(contact_mask), kernel, iterations=2)
-        enlarged_mask = dialate_mask == 1
-        boundary_contact_mask = 1 * enlarged_mask - 1 * contact_mask
-        contact_mask = boundary_contact_mask == 1
-
-        # (x,y) coordinates of all pixels to attach shadow
-        x_coord = xx[contact_mask]
-        y_coord = yy[contact_mask]
-
-        # get normal index to shadow table
-        normMap = grad_dir[contact_mask] + np.pi
-        norm_idx = normMap // pr.discritize_precision
-        # get height index to shadow table
-        contact_map = contact_height[contact_mask]
-        height_idx = (contact_map * psp.pixmm - self.shadow_depth[0]) // pr.height_precision
-        height_idx_max = int(np.max(height_idx))
-        total_height_idx = self.shadowTable.shape[2]
-
-        shadowSim = np.zeros((psp.h, psp.w, 3))
-
-        # all 3 channels
-        for c in range(3):
-            frame = sim_img_r[:, :, c].copy()
-            frame_back = sim_img_r[:, :, c].copy()
-            for i in range(len(x_coord)):
-                # get the coordinates (x,y) of a certain pixel
-                cy_origin = y_coord[i]
-                cx_origin = x_coord[i]
-                # get the normal of the pixel
-                n = int(norm_idx[i])
-                # get height of the pixel
-                h = int(height_idx[i]) + 6
-                if h < 0 or h >= total_height_idx:
-                    continue
-                # get the shadow list for the pixel
-                v = self.shadowTable[c, n, h]
-
-                # number of steps
-                num_step = len(v)
-
-                # get the shadow direction
-                theta = self.direction[n]
-                d_theta = theta
-                ct = np.cos(d_theta)
-                st = np.sin(d_theta)
-                # use a fan of angles around the direction
-                theta_list = np.arange(d_theta - pr.fan_angle, d_theta + pr.fan_angle, pr.fan_precision)
-                ct_list = np.cos(theta_list)
-                st_list = np.sin(theta_list)
-                for theta_idx in range(len(theta_list)):
-                    ct = ct_list[theta_idx]
-                    st = st_list[theta_idx]
-
-                    for s in range(1, num_step):
-                        cur_x = int(cx_origin + pr.shadow_step * s * ct)
-                        cur_y = int(cy_origin + pr.shadow_step * s * st)
-                        # check boundary of the image and height's difference
-                        if cur_x >= 0 and cur_x < psp.w and cur_y >= 0 and cur_y < psp.h and heightMap[
-                            cy_origin, cx_origin] > heightMap[cur_y, cur_x]:
-                            frame[cur_y, cur_x] = np.minimum(frame[cur_y, cur_x], v[s])
-
-            shadowSim[:, :, c] = frame
-            shadowSim[:, :, c] = ndimage.gaussian_filter(shadowSim[:, :, c], sigma=(pr.sigma, pr.sigma), order=0)
-
-        shadow_sim_img = shadowSim + self.bg_proc
-        shadow_sim_img = cv2.GaussianBlur(shadow_sim_img.astype(np.float32), (pr.kernel_size, pr.kernel_size), 0)
-        return sim_img, shadow_sim_img
-
-    def generateHeightMap(self, gelpad_model_path, pressing_height_mm, dx, dy):
-        """
-        Generate the height map by interacting the object with the gelpad model.
-        pressing_height_mm: pressing depth in millimeter
-        dx, dy: shift of the object
-        return:
-        zq: the interacted height map
-        gel_map: gelpad height map
-        contact_mask: indicate contact area
-        """
-        assert (self.vertices.shape[1] == 3)
-        # load dome-shape gelpad model
-        gel_map = np.load(gelpad_model_path)
-        gel_map = cv2.GaussianBlur(gel_map.astype(np.float32), (pr.kernel_size, pr.kernel_size), 0)
-        heightMap = np.zeros((psp.h, psp.w))
-
-        # centralize the points
-        cx = np.mean(self.vertices[:, 0])
-        cy = np.mean(self.vertices[:, 1])
-        # add the shifting and change to the pix coordinate
-        uu = ((self.vertices[:, 0] - cx) / psp.pixmm + psp.w // 2 + dx).astype(int)
-        vv = ((self.vertices[:, 1] - cy) / psp.pixmm + psp.h // 2 + dy).astype(int)
-        # check boundary of the image
-        mask_u = np.logical_and(uu > 0, uu < psp.w)
-        mask_v = np.logical_and(vv > 0, vv < psp.h)
-        # check the depth
-        mask_z = self.vertices[:, 2] > 0.2
-        mask_map = mask_u & mask_v & mask_z
-        heightMap[vv[mask_map], uu[mask_map]] = self.vertices[mask_map][:, 2] / psp.pixmm
-
-        max_g = np.max(gel_map)
-        min_g = np.min(gel_map)
-        max_o = np.max(heightMap)
-        # pressing depth in pixel
-        pressing_height_pix = pressing_height_mm / psp.pixmm
-
-        # shift the gelpad to interact with the object
-        gel_map = -1 * gel_map + (max_g + max_o - pressing_height_pix)
-
-        # get the contact area
-        contact_mask = heightMap > gel_map
-
-        # combine contact area of object shape with non contact area of gelpad shape
-        zq = np.zeros((psp.h, psp.w))
-
-        zq[contact_mask] = heightMap[contact_mask]
-        zq[~contact_mask] = gel_map[~contact_mask]
-        return zq, gel_map, contact_mask
-
-    def deformApprox(self, pressing_height_mm, height_map, gel_map, contact_mask):
-        zq = height_map.copy()
-        zq_back = zq.copy()
-        pressing_height_pix = pressing_height_mm / psp.pixmm
-        # contact mask which is a little smaller than the real contact mask
-        mask = (zq - (gel_map)) > pressing_height_pix * pr.contact_scale
-        mask = mask & contact_mask
-
-        # approximate soft body deformation with pyramid gaussian_filter
-        for i in range(len(pr.pyramid_kernel_size)):
-            zq = cv2.GaussianBlur(zq.astype(np.float32), (pr.pyramid_kernel_size[i], pr.pyramid_kernel_size[i]), 0)
-            zq[mask] = zq_back[mask]
-        zq = cv2.GaussianBlur(zq.astype(np.float32), (pr.kernel_size, pr.kernel_size), 0)
-
-        contact_height = zq - gel_map
-
-        return zq, mask, contact_height
+        return sim_img
 
     def interpolate(self, img):
         """
@@ -356,38 +185,62 @@ class simulator(object):
         return np.pad(img, ((1, 1), (1, 1)), 'symmetric')
 
 
-if __name__ == "__main__":
-    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/combined_data"  # osp.join(osp.join("..", "calibs"))
-    filePath = None  # osp.join('..', 'data', 'objects')
-    # gelpad_model_path = osp.join( '..', 'calibs', 'gelmap5.npy')
-    obj = None  # args.obj + '.ply'
-    sim = simulator(data_folder, filePath, obj)
-    press_depth = args.depth
-    dx = 0
-    dy = 0
+class RenderData:
 
-    # generate height map
-    # height_map, gel_map, contact_mask = sim.generateHeightMap(gelpad_model_path, press_depth, dx, dy)
-    # approximate the soft deformation
-    # heightMap, contact_mask, contact_height = sim.deformApprox(press_depth, height_map, gel_map, contact_mask)
-    # simulate tactile images
-    for trial_idx in range(120):
-        for idx in range(4):
-            heightMap = utils.load_gzip_pickle(
-                f"/home/markvdm/Documents/TacSL/tacsl_depth/out/proc/gs_mini_v5/trial_{trial_idx}/depth_diff_{idx}.pkl.gzip")
+    def __init__(self, data_dir, out_dir, model_dir):
+        self.renderer = Renderer(model_dir)
+        self.data_dir = data_dir
+        self.out_dir = out_dir
+
+    def __call__(self, trial_idx: int):
+        trial_dir = osp.join(args.data_dir, f"trial_{trial_idx}")
+        trial_out_dir = osp.join(args.out_dir, f"trial_{trial_idx}")
+        utils.make_dir(trial_out_dir)
+
+        num_frames = len([f for f in os.listdir(trial_dir) if "depth_" in f and ".pkl.gzip" in f])
+
+        nominal_depth = utils.load_gzip_pickle(os.path.join(trial_dir, "nominal_depth.pkl.gzip"))
+        utils.save_gzip_pickle(nominal_depth, os.path.join(trial_out_dir, "nominal_depth.pkl.gzip"))
+
+        for idx in range(num_frames):
+            depth = utils.load_gzip_pickle(os.path.join(trial_dir, f"depth_{idx}.pkl.gzip"))
+            utils.save_gzip_pickle(depth, os.path.join(trial_out_dir, f"depth_{idx}.pkl.gzip"))
+
+            heightMap = nominal_depth[0] - depth
+            utils.save_gzip_pickle(heightMap, os.path.join(trial_out_dir, f"depth_diff_{idx}.pkl.gzip"))
+
             heightMap *= 1e3
             heightMap /= psp.pixmm
             heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (5, 5), 10)
 
-            # heightMap = np.zeros((psp.h, psp.w))
-            sim_img, shadow_sim_img = sim.simulating(heightMap, None, None, shadow=False)
-            # img_savePath = osp.join('..', 'results', obj[:-4] + '_sim.jpg')
-            # shadow_savePath = osp.join('..', 'results', obj[:-4] + '_shadow.jpg')
-            # height_savePath = osp.join('..', 'results', obj[:-4] + '_height.npy')
-            # cv2.imwrite("test.png", sim_img)
-            # cv2.imwrite(shadow_savePath, shadow_sim_img)
-            # np.save(height_savePath, heightMap)
+            sim_img = self.renderer.render(heightMap)
+            cv2.imwrite(os.path.join(trial_out_dir, f"tactile_{idx}.png"), sim_img.astype(np.uint8))
 
-            # cv2.imshow("sim", cv2.cvtColor(sim_img.astype(np.uint8), cv2.COLOR_BGR2RGB))
-            cv2.imshow("sim", sim_img.astype(np.uint8))
-            cv2.waitKey(0)
+            if args.vis:
+                cv2.imshow("sim", sim_img.astype(np.uint8))
+                cv2.waitKey(0)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Render generate depth images.")
+    parser.add_argument("data_dir", type=str, help="Data directory to render out.")
+    parser.add_argument("out_dir", type=str, help="out dir")
+    parser.add_argument("--model_dir", "-m", type=str,
+                        default="/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/combined_data",
+                        help="Rendering model.")
+    parser.add_argument("--vis", "-v", action="store_true", help="Visualize the output.")
+    parser.set_defaults(vis=False)
+    parser.add_argument("--jobs", "-j", type=int, default=1, help="Number of jobs to run in parallel.")
+    args = parser.parse_args()
+    utils.make_dir(args.out_dir)
+
+    render_data = RenderData(args.data_dir, args.out_dir, args.model_dir)
+
+    num_trials = len([f for f in os.listdir(args.data_dir) if "trial_" in f])
+    if args.jobs == 1:
+        for trial_idx in trange(num_trials):
+            render_data(trial_idx)
+    else:
+        with multiprocessing.Pool(args.jobs) as pool:
+            for _ in tqdm(pool.imap_unordered(render_data, range(num_trials)), total=num_trials):
+                pass
