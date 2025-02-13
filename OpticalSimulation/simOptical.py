@@ -1,3 +1,4 @@
+import copy
 import multiprocessing
 import os
 from os import path as osp
@@ -36,6 +37,7 @@ class Renderer(object):
         self.f0_raw = data_file['f0']
         self.f0 = proc_image(self.f0_raw)
         self.marker_mask = find_marker(self.f0_raw, pixel_mask=1)
+        self.render_markers = False
 
         self.bg_proc = self.processInitialFrame()
         # self.f0 = data_file['f0']
@@ -124,16 +126,18 @@ class Renderer(object):
         # plt.show()
 
         # attach background to simulated image
-        sim_img = self.bg_proc + sim_img_r
+        base = copy.deepcopy(self.bg_proc)
+        sim_img = base + sim_img_r
         # sim_img[depth_mask] += sim_img_r[depth_mask].astype(np.uint8)
         # sim_img = self.bg_proc
 
         # Apply gaussian blur.
-        # sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (pr.kernel_size, pr.kernel_size), 2)
+        sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (11, 11), 500)
 
         # Add markers back in.
-        sim_img[self.marker_mask] = self.f0_raw[self.marker_mask]
-        sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (3, 3), 2)
+        if self.render_markers:
+            sim_img[self.marker_mask] = self.f0_raw[self.marker_mask]
+            sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (3, 3), 2)
 
         return sim_img
 
@@ -199,7 +203,8 @@ class RenderData:
 
         num_frames = len([f for f in os.listdir(trial_dir) if "depth_" in f and ".pkl.gzip" in f])
 
-        nominal_depth = utils.load_gzip_pickle(os.path.join(trial_dir, "nominal_depth.pkl.gzip"))
+        nominal_depth = utils.load_gzip_pickle(os.path.join(trial_dir, "depth_0.pkl.gzip"))
+        # nominal_depth = utils.load_gzip_pickle(os.path.join(trial_dir, "nominal_depth.pkl.gzip"))
         utils.save_gzip_pickle(nominal_depth, os.path.join(trial_out_dir, "nominal_depth.pkl.gzip"))
 
         for idx in range(num_frames):
@@ -211,7 +216,7 @@ class RenderData:
 
             heightMap *= 1e3
             heightMap /= psp.pixmm
-            heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (5, 5), 10)
+            heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (9, 9), 200)
 
             sim_img = self.renderer.render(heightMap)
             cv2.imwrite(os.path.join(trial_out_dir, f"tactile_{idx}.png"), sim_img.astype(np.uint8))
