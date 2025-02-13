@@ -149,13 +149,20 @@ class simulator(object):
         sim_img_r[:, :, 1] = est_g.reshape((psp.h, psp.w))
         sim_img_r[:, :, 2] = est_b.reshape((psp.h, psp.w))
 
+        # plt.imshow(np.linalg.norm(sim_img_r, axis=-1))
+        # plt.show()
+
         # attach background to simulated image
         sim_img = self.bg_proc + sim_img_r
         # sim_img[depth_mask] += sim_img_r[depth_mask].astype(np.uint8)
         # sim_img = self.bg_proc
 
+        # Apply gaussian blur.
+        # sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (pr.kernel_size, pr.kernel_size), 2)
+
         # Add markers back in.
         sim_img[self.marker_mask] = self.f0_raw[self.marker_mask]
+        sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (3, 3), 2)
 
         if not shadow:
             return sim_img, sim_img
@@ -350,7 +357,7 @@ class simulator(object):
 
 
 if __name__ == "__main__":
-    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/02_11_2025/sphere_4mm"  # osp.join(osp.join("..", "calibs"))
+    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/combined_data"  # osp.join(osp.join("..", "calibs"))
     filePath = None  # osp.join('..', 'data', 'objects')
     # gelpad_model_path = osp.join( '..', 'calibs', 'gelmap5.npy')
     obj = None  # args.obj + '.ply'
@@ -364,21 +371,23 @@ if __name__ == "__main__":
     # approximate the soft deformation
     # heightMap, contact_mask, contact_height = sim.deformApprox(press_depth, height_map, gel_map, contact_mask)
     # simulate tactile images
-    heightMap = utils.load_gzip_pickle(
-        "/home/markvdm/Documents/TacSL/tacsl_depth/out/proc/gs_mini_v5/trial_0/depth_diff_1.pkl.gzip")
-    heightMap *= 1e3
-    heightMap /= psp.pixmm
-    heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (5, 5), 0)
+    for trial_idx in range(120):
+        for idx in range(4):
+            heightMap = utils.load_gzip_pickle(
+                f"/home/markvdm/Documents/TacSL/tacsl_depth/out/proc/gs_mini_v5/trial_{trial_idx}/depth_diff_{idx}.pkl.gzip")
+            heightMap *= 1e3
+            heightMap /= psp.pixmm
+            heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (5, 5), 10)
 
-    # heightMap = np.zeros((psp.h, psp.w))
-    sim_img, shadow_sim_img = sim.simulating(heightMap, None, None, shadow=False)
-    # img_savePath = osp.join('..', 'results', obj[:-4] + '_sim.jpg')
-    # shadow_savePath = osp.join('..', 'results', obj[:-4] + '_shadow.jpg')
-    # height_savePath = osp.join('..', 'results', obj[:-4] + '_height.npy')
-    # cv2.imwrite("test.png", sim_img)
-    # cv2.imwrite(shadow_savePath, shadow_sim_img)
-    # np.save(height_savePath, heightMap)
+            # heightMap = np.zeros((psp.h, psp.w))
+            sim_img, shadow_sim_img = sim.simulating(heightMap, None, None, shadow=False)
+            # img_savePath = osp.join('..', 'results', obj[:-4] + '_sim.jpg')
+            # shadow_savePath = osp.join('..', 'results', obj[:-4] + '_shadow.jpg')
+            # height_savePath = osp.join('..', 'results', obj[:-4] + '_height.npy')
+            # cv2.imwrite("test.png", sim_img)
+            # cv2.imwrite(shadow_savePath, shadow_sim_img)
+            # np.save(height_savePath, heightMap)
 
-    # cv2.imshow("sim", cv2.cvtColor(sim_img.astype(np.uint8), cv2.COLOR_BGR2RGB))
-    cv2.imshow("sim", sim_img.astype(np.uint8))
-    cv2.waitKey(0)
+            # cv2.imshow("sim", cv2.cvtColor(sim_img.astype(np.uint8), cv2.COLOR_BGR2RGB))
+            cv2.imshow("sim", sim_img.astype(np.uint8))
+            cv2.waitKey(0)

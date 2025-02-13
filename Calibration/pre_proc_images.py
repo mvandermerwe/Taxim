@@ -27,13 +27,32 @@ def grow_mask(mask, pixels):
 
 def find_marker(img, pixel_mask: int = 3):
     # img_ = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # mask = cv2.inRange(img_, 0, 70) > 0
+    # mask = img_ < 70
 
     # Check for colors close to black.
     black = np.array([0, 0, 0])
 
     mask = np.linalg.norm(img - black, axis=-1) < 110
     mask = grow_mask(mask, pixel_mask)
+
+    # Convert to HSV color space
+    # hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    #
+    # # Define lower and upper bounds for black color (low value and low saturation)
+    # lower_black = np.array([0, 0, 0])  # Min Hue, Saturation, Value
+    # upper_black = np.array([255, 255, 70])  # Max Hue, Saturation, Value
+    #
+    # # Create mask for black dots
+    # mask = cv2.inRange(hsv, lower_black, upper_black)
+    #
+    # # Apply morphological operations to refine the mask
+    # kernel = np.ones((3, 3), np.uint8)
+    # mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    # mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    # mask = mask > 0
+    #
+    # mask = grow_mask(mask, pixel_mask)
+
     return mask
 
 
