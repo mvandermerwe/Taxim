@@ -19,6 +19,8 @@ import nanogui as ng
 from nanogui import Texture
 from nanogui import glfw
 
+from pre_proc_images import proc_image
+
 # define the image size, should be consistent with the raw data size
 w, h = 320, 240
 
@@ -206,6 +208,7 @@ class CalibrateApp(ng.Screen):
             # Load img
             self.orig_img = cv2.imread(self.fnames[self.next_img_num])
             self.orig_img = cv2.cvtColor(self.orig_img, cv2.COLOR_BGR2RGB)
+            self.orig_img_proc = proc_image(self.orig_img)
             size = self.orig_img.shape
             self.circle = Circle(size[0], size[1])
 
@@ -214,7 +217,7 @@ class CalibrateApp(ng.Screen):
             self.load_img = False
             self.change = False
             # Add circle
-            img = self.overlay_circle(self.orig_img, self.circle)
+            img = self.overlay_circle(self.orig_img_proc, self.circle)
 
             if (self.img_tex.channels() > 3):
                 height, width = img.shape[:2]

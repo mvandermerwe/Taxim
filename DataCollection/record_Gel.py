@@ -13,7 +13,7 @@ def record_Gel():
 
     now = datetime.now()
     # Directory to save data
-    parent_dir = '../data/gel/gs_mini_28N0_295H'
+    parent_dir = '../data/gel/gs_mini_2D86_NUYL'
     utils.make_dir(parent_dir)
     # Create Date Directiory
     date = now.strftime('%m_%d_%Y')
@@ -45,8 +45,8 @@ def record_Gel():
     print("Data Collection Started!")
     while not rospy.is_shutdown():
         rate.sleep()
-        key = input("input s to save a new frame: ")
-        if key == 's':
+        key = input("Save image: [y]/n")
+        if key == 'y' or key == '':
             filename = 'frame_' + str(gelsight.gelsight_count) + '.jpg'
             cv2.imwrite(gelsight.gel_path + '/' + filename, gelsight.img)
             gelsight.gelsight_count += 1

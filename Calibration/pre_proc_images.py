@@ -57,7 +57,7 @@ def find_marker(img, pixel_mask: int = 3):
 
 
 def proc_image(img):
-    marker_mask = find_marker(img)
+    marker_mask = find_marker(img, 3)
 
     # img[marker_mask] = 255
     # cv2.imshow("marker", img)
@@ -81,10 +81,10 @@ def pre_proc_images(data_folder: str):
 
         img = proc_image(img)
 
-        cv2.imshow("raw", img)
-        cv2.waitKey(0)
+        # cv2.imshow("raw", img)
+        # cv2.waitKey(0)
 
 
 if __name__ == '__main__':
-    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/02_11_2025/sphere_4mm"
+    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_2D86_NUYL/02_14_2025/sphere_4mm"
     pre_proc_images(data_folder)

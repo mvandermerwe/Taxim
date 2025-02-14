@@ -153,7 +153,7 @@ class RenderCalibExamples:
 
 
 if __name__ == '__main__':
-    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_28N0_295H/combined_data"
+    data_folder = "/home/markvdm/RobotSetup/merl_ws/src/Taxim/data/gel/gs_mini_2D86_NUYL/02_14_2025/sphere_4mm"
     r = RenderCalibExamples(data_folder)
-    for i in range(45, len(r.imgs)):
+    for i in range(len(r.imgs)):
         r.render(i)

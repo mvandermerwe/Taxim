@@ -38,7 +38,7 @@ class GelSight:
         # Launch the file: roslaunch usb_cam usb_cam-test.launch
 
         print("reading in the gelsight images...")
-        gelsight_topic = '/gelsight_mini/image_color_28N0_295H'
+        gelsight_topic = '/gelsight_mini/image_color_2D86_NUYL'
         self.gel_sub = rospy.Subscriber(gelsight_topic, Image, self.gelSightCallback)
 
     def gelSightCallback(self, img):
