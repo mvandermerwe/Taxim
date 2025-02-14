@@ -214,7 +214,7 @@ class RenderData:
             heightMap = nominal_depth[0] - depth
             utils.save_gzip_pickle(heightMap, os.path.join(trial_out_dir, f"depth_diff_{idx}.pkl.gzip"))
 
-            heightMap *= 1e3
+            heightMap *= -1e3
             heightMap /= psp.pixmm
             heightMap = cv2.GaussianBlur(heightMap.astype(np.float32), (9, 9), 200)
 
