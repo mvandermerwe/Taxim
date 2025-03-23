@@ -1,0 +1,2 @@
+mesh: data/objects/cylinder_real_high_res.obj
+sample_pose: [ 0, 0, 0, 0, 0, 0, 1 ]
