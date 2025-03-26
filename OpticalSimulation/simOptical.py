@@ -35,7 +35,7 @@ class Renderer(object):
         rawData = osp.join(data_folder, "dataPack.npz")
         data_file = np.load(rawData, allow_pickle=True)
         self.f0_raw = data_file['f0']
-        self.f0 = proc_image(self.f0_raw)
+        self.f0 = proc_image(self.f0_raw, vis=False)
         self.marker_mask = find_marker(self.f0_raw, pixel_mask=1)
         self.render_markers = False
 
@@ -74,6 +74,9 @@ class Renderer(object):
         for ch in range(f0.shape[2]):
             f0[:, :, ch][idx] = frame_mixing_per * f0[:, :, ch][idx] + (1 - frame_mixing_per) * frame_[:, :, ch][idx]
 
+        # cv2.imshow("base", f0)
+        # cv2.waitKey(0)
+
         return f0
 
     def render(self, heightMap):
@@ -87,7 +90,8 @@ class Renderer(object):
 
         # generate gradients of the height map
         grad_mag, grad_dir = self.generate_normals(heightMap)
-        depth_mask = heightMap > 0
+        depth_mask = heightMap > -np.inf
+        # depth_mask = heightMap > 1e-6
 
         # generate raw simulated image without background
         sim_img_r = np.zeros((psp.h, psp.w, 3))
@@ -127,12 +131,12 @@ class Renderer(object):
 
         # attach background to simulated image
         base = copy.deepcopy(self.bg_proc)
-        sim_img = base + sim_img_r
-        # sim_img[depth_mask] += sim_img_r[depth_mask].astype(np.uint8)
+        sim_img = base  # + sim_img_r
+        sim_img[depth_mask] = self.bg_proc[depth_mask] + sim_img_r[depth_mask].astype(np.uint8)
         # sim_img = self.bg_proc
 
         # Apply gaussian blur.
-        sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (11, 11), 500)
+        sim_img = cv2.GaussianBlur(sim_img.astype(np.float32), (3, 3), 2)
 
         # Add markers back in.
         if self.render_markers:

@@ -56,7 +56,7 @@ def find_marker(img, pixel_mask: int = 3):
     return mask
 
 
-def proc_image(img):
+def proc_image(img, vis: bool = False):
     marker_mask = find_marker(img, 3)
 
     # img[marker_mask] = 255
@@ -65,8 +65,9 @@ def proc_image(img):
     # Inpaint the markers.
     img_ = cv2.inpaint(img, marker_mask.astype(np.uint8), 20, cv2.INPAINT_NS)
 
-    # cv2.imshow("inpaint", img_)
-    # cv2.waitKey(0)
+    if vis:
+        cv2.imshow("inpaint", img_)
+        cv2.waitKey(0)
 
     return img_
 
